@@ -21,7 +21,6 @@
 - [Applied Best Practices](#applied-best-practices)
 - [Requirements](#requirements)
 - [Results](#results)
-- [Future Improvements](#future-improvements)
 
 ---
 
@@ -206,65 +205,31 @@ Athena connects directly to Power BI, enabling scalable dashboards for sales, ma
 
 ## ⚙ Job Orchestration (KJB – Pentaho)
 
-The pipeline is orchestrated using Pentaho Jobs (KJB), ensuring controlled execution, dependency management, and failure handling.
-
-Two main execution flows were implemented: historical backfill and recurring daily load.
+Pipeline orchestration is handled via Pentaho Jobs (KJB), ensuring dependency control, incremental processing, and production-grade failure handling.
 
 ---
 
-### 🟢 JOB_BACKFILL — Initial Historical Load
+### 🟢 Historical Backfill Job
 
-Purpose: Populate the Data Warehouse from scratch.
+Initial full load of the analytical layer.
 
-This job is designed to perform a full historical load and is typically executed during:
-
-- Initial environment setup
-- Major structural changes
-- Data reprocessing scenarios
-
-Execution flow:
-
-- Start
-- Build all DIM_* tables (Type 1)
-- Load all FACT_* tables
-- Validate row counts
-- Success
-
-Key characteristics:
-
-- Full data extraction from ERP
-- Complete rebuild of dimensions
-- Full historical fact population
-- Referential integrity validation
+- Rebuilds all DIM_* tables (Type 1)
+- Loads FACT_* tables with complete historical data
+- Executes validation checks
+- Designed for initial setup or structural changes
 
 <img width="731" height="377" alt="image" src="https://github.com/user-attachments/assets/4d953b79-a63b-4fbc-a8c4-a33b1e884f20" />
 
 ---
 
-### 🔵 JOB_DAILY — Recurring Incremental Load
+### 🔵 Daily Incremental Job
 
-Purpose: Maintain the Data Warehouse updated with minimal processing cost.
+Automated recurring load (runs daily).
 
-Execution frequency:
-- Runs automatically once per day
-
-Execution flow:
-
-- Start
-- Rebuild DIM_* (Type 1 overwrite strategy)
-- Load FACT_* incrementally (or snapshot-based where applicable)
-- Update structured datasets in AWS S3
-- Trigger Glue schema refresh (if necessary)
-- Success
-
-Key characteristics:
-
-- Incremental extraction logic
-- Snapshot handling for inventory
-- Controlled update of fact tables
-- Cloud storage synchronization
-
-This approach ensures performance efficiency while preserving data consistency.
+- Rebuilds dimensions (Type 1 overwrite)
+- Loads facts incrementally or via snapshot (inventory)
+- Updates structured datasets in Amazon S3
+- Maintains analytical consistency with minimal processing cost
 
 <img width="742" height="381" alt="image" src="https://github.com/user-attachments/assets/e1ed7833-c7d8-47a4-997b-c16569ff49d9" />
 
@@ -272,20 +237,12 @@ This approach ensures performance efficiency while preserving data consistency.
 
 ### 🔴 Failure Handling & Monitoring
 
-The orchestration layer includes production-oriented failure control mechanisms:
-
-- Automatic retry (N configurable attempts)
-- Email notification alerts
+- Configurable retry logic
+- Email alert notifications
 - Controlled abort on critical failures
-- External log monitoring implemented
 - Row count validation between layers
 
-These mechanisms ensure:
-
-- Data reliability
-- Controlled execution
-- Operational transparency
-- Reduced risk of silent data corruption
+The orchestration layer is designed for reliability, idempotent execution, and production stability.
 
 ---
 
