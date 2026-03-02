@@ -1,10 +1,13 @@
-# 🏗️ ETL & Data Warehouse Architecture – Retail Supermarket
+# 🏗️ Lake-Based Data Warehouse Architecture for Retail Analytics
 
 ![AWS](https://img.shields.io/badge/AWS-S3%20%7C%20Athena%20%7C%20Glue-orange)
 ![Pentaho](https://img.shields.io/badge/Pentaho-Data%20Integration-blue)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-ERP-blue)
 ![Power BI](https://img.shields.io/badge/Power%20BI-Analytics-yellow)
 ![Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen)
+
+<img width="1733" height="783" alt="ETL" src="https://github.com/user-attachments/assets/06aa3e73-4663-477b-aca1-2402d13fbdcc" />
+
 
 ---
 
@@ -14,7 +17,6 @@
 - [Business Objective](#business-objective)
 - [Solution Architecture](#solution-architecture)
 - [Data Flow](#data-flow)
-- [Dimensional Modeling](#dimensional-modeling)
 - [Job Orchestration](#job-orchestration)
 - [Applied Best Practices](#applied-best-practices)
 - [Requirements](#requirements)
@@ -25,19 +27,9 @@
 
 ## 📌 Project Overview
 
-This project implements a production-oriented end-to-end ETL pipeline and Data Warehouse architecture for a retail supermarket operation.
+This project implements a production-oriented end-to-end ETL pipeline and a lake-based analytical architecture for a retail supermarket operation.
 
-The solution extracts transactional data from a PostgreSQL ERP system, applies structured transformations using Pentaho (Kettle), organizes data into a dimensional Star Schema model, and delivers a scalable cloud-based analytical layer using AWS S3 and Athena.
-
-Unlike dashboard-only projects, this repository focuses on the engineering foundation that enables reliable, scalable, and automated business intelligence.
-
-The architecture was designed to:
-
-- Separate transactional and analytical workloads
-- Ensure data consistency and reproducibility
-- Support incremental and historical loads
-- Enable cloud scalability
-- Provide a stable foundation for executive dashboards
+The solution extracts transactional data from a PostgreSQL ERP system, applies structured transformations using Pentaho, organizes data into a dimensional Star Schema model, and delivers a scalable cloud-based analytical layer using Amazon S3, AWS Glue, and Athena.
 
 The pipeline runs automatically on a daily basis (incremental load) and does not require manual intervention.
 
@@ -45,25 +37,11 @@ The pipeline runs automatically on a daily basis (incremental load) and does not
 
 ## 🎯 Business Objective
 
-The primary objective of this project is to transform raw ERP transactional data into structured, analytics-ready datasets that support strategic retail decision-making.
+Transform raw ERP transactional data into structured, analytics-ready datasets stored in a cloud-based Data Lake that support strategic retail decision-making.
 
-This architecture enables:
+The replication of the ERP database to Amazon S3 enables direct BI connectivity without overloading the transactional system, while providing a scalable and decoupled environment for building decision-oriented dashboards.
 
-- Revenue and gross margin analysis
-- Inventory valuation and stock monitoring
-- Loss tracking and shrinkage control
-- Supplier performance evaluation
-- Purchase and ABC curve analysis
-- Turnover and operational efficiency indicators
-
-Beyond analytics, the architecture also aims to:
-
-- Reduce dependency on local servers
-- Improve data reliability and traceability
-- Ensure reproducibility of KPI calculations
-- Prepare the environment for multi-store or multi-client scalability
-
-The Data Warehouse serves as the single source of truth for all BI dashboards.
+The analytical layer acts as the single source of truth for all BI dashboards, ensuring reliability, scalability, and consistent KPI calculations.
 
 ---
 
@@ -163,167 +141,66 @@ The Data Warehouse serves as the single source of truth for all BI dashboards.
 
 ## 🔄 Data Flow
 
-The data pipeline follows a layered architecture designed to ensure separation of concerns, data reliability, and analytical scalability.
+The pipeline follows a layered architecture designed for reliability, scalability, and BI decoupling.
+
+---
 
 ### 1️⃣ Source Layer — ERP (PostgreSQL)
 
-Transactional data is extracted from a retail ERP system.
+Transactional retail data is extracted from the ERP using SQL-based steps in Pentaho (PDI).
 
-**Core transactional tables include:**
-
-- sales
-- inventory
-- losses
-- purchase_notes
-- master_data (products, suppliers, stores, buyers)
-
-Extraction is performed using SQL-based Table Input steps within Pentaho (PDI).
+Core domains:
+- Sales  
+- Inventory  
+- Losses  
+- Purchase Notes  
+- Master Data (products, suppliers, stores, buyers)
 
 ---
 
-### 2️⃣ Processing Layer — Pentaho Data Integration (PDI)
+### 2️⃣ Processing Layer — Pentaho (PDI)
 
-Transformations (KTR) are structured into three logical layers:
+Transformations (KTR) are organized into three logical layers:
 
----
+#### 🔹 STG (Standardization)
+- Data cleaning and normalization  
+- Type enforcement and null handling  
+- Key validation  
+- Controlled preprocessing for dimensional modeling  
 
-#### 🔹 STG Layer (Standardization)
+#### 🔹 DIM (Type 1 Dimensions)
+- Conformed dimensions (product, supplier, store, buyer, ABC, etc.)  
+- Surrogate key generation  
+- Many-to-many bridge resolution  
 
-Purpose: Clean and standardize raw ERP data before dimensional modeling.
+#### 🔹 FACT (Business Events)
+Fact tables built at defined grain levels:
 
-Main responsibilities:
-
-- Column selection and renaming
-- Data type enforcement
-- Date normalization
-- Null handling and trimming
-- Key formatting and validation
-- Basic row count checks
-
-This layer ensures controlled and reproducible downstream transformations.
-
----
-
-#### 🔹 DIM Layer (Type 1 Dimensions)
-
-Purpose: Build conformed dimensions for analytical consistency.
-
-Dimensions are rebuilt using Type 1 logic (overwrite strategy):
-
-- dim_product
-- dim_supplier
-- dim_store
-- dim_merchandising
-- dim_buyer
-- dim_abc_curve
-- dim_abc_type
-- bridge_product_supplier (many-to-many resolution)
-
-Surrogate keys are generated to guarantee referential integrity.
+- **fact_sales** → revenue, cost, gross margin  
+- **fact_inventory** → stock valuation (snapshot)  
+- **fact_losses** → shrinkage valuation  
+- **fact_purchase_items** → purchase-level granularity  
+- **inventory_log** → stock movement tracking  
 
 ---
 
-#### 🔹 FACT Layer (Granularity & Business Calculations)
+### 3️⃣ Storage Layer — AWS S3
 
-Purpose: Store measurable retail events at defined grain levels.
-
-**fact_sales**
-- total_revenue = sale_price × quantity
-- total_cost = cost_with_tax × quantity
-- gross_margin = total_revenue – total_cost
-- grain: product × store × date × supplier
-
-**fact_inventory**
-- inventory_value = cost_with_tax × stock_quantity
-- snapshot-based (by reference date)
-
-**fact_losses**
-- loss_value = cost_with_tax × loss_quantity
-- linked to dim_loss_reason
-
-**fact_purchase_items**
-- purchase items at note-level granularity
-- value, quantity, product, supplier
-
-**inventory_log**
-- audit trail for stock movement tracking
+Processed dimension and fact datasets are stored in structured folders (`/dim/`, `/fact/`) inside Amazon S3, enabling scalable cloud storage and analytical decoupling from the ERP.
 
 ---
 
-### 3️⃣ Storage Layer — AWS S3 (Data Lake)
+### 4️⃣ Metadata & Query Layer — AWS Glue + Athena
 
-Processed dimension and fact datasets are stored in structured folders:
-
-- /dim/
-- /fact/
-
-This enables scalable storage and decouples transformation from analytics consumption.
+- Schema cataloging via Glue  
+- External tables  
+- SQL querying through Athena  
 
 ---
 
-### 4️⃣ Metadata Layer — AWS Glue + Data Catalog
+### 5️⃣ BI Layer — Power BI
 
-- Automatic schema discovery
-- External table updates
-- Centralized metadata governance
-
----
-
-### 5️⃣ Analytical Layer — AWS Athena + Power BI
-
-- SQL querying on dimensional model
-- BI dashboards for sales, margin, losses, suppliers, and inventory
-- Single source of truth for retail KPIs
-
----
-
-## 📊 Dimensional Modeling
-
-The Data Warehouse follows a Star Schema design to optimize analytical performance and simplify BI consumption.
-
----
-
-### ⭐ Fact Tables
-
-The fact tables represent measurable retail events at defined grain levels:
-
-- **fact_sales** → transactional sales events
-- **fact_inventory** → inventory snapshot values
-- **fact_losses** → recorded product losses
-- **fact_purchase_items** → purchase note line items
-
-Each fact table includes surrogate foreign keys linking to conformed dimensions.
-
----
-
-### 📘 Dimension Tables (Type 1)
-
-Dimensions provide descriptive business context and are rebuilt using Type 1 logic:
-
-- dim_product
-- dim_supplier
-- dim_store
-- dim_merchandising (category hierarchy)
-- dim_buyer
-- dim_abc_curve
-- dim_abc_type
-
-A bridge table resolves many-to-many relationships:
-
-- bridge_product_supplier
-
----
-
-### 🧩 Design Principles Applied
-
-- Star Schema for performance optimization
-- Conformed dimensions across facts
-- Surrogate keys for referential integrity
-- Defined grain per fact table
-- Separation of transactional and analytical environments
-- KPI reproducibility and consistency
-
-The dimensional model guarantees fast analytical queries, scalable growth, and maintainable business logic.
+Athena connects directly to Power BI, enabling scalable dashboards for sales, margin, inventory, losses, and supplier performance — all powered by a centralized Data Warehouse.
 
 ---
 
@@ -420,60 +297,20 @@ These mechanisms ensure:
 - Monitoring-first mindset
 - Designed for scalability and production stability
 
-
 ---
 
 ## 🧩 Applied Best Practices
 
-This project follows modern data engineering and Data Warehouse best practices to ensure reliability, scalability, and maintainability.
+This solution follows modern lake-based data engineering principles to ensure scalability and production readiness.
 
-### 🏗️ Architectural Principles
+- Layered pipeline (STG → DIM → FACT)
+- Logical Star Schema for BI optimization
+- Decoupled storage (Amazon S3) and compute (Athena)
+- Incremental and idempotent ETL processing
+- Conformed dimensions with defined grain per fact
+- External table exposure via AWS Glue
 
-- Layered architecture (STG → DIM → FACT)
-- Clear separation between transactional and analytical environments
-- Decoupled storage (S3) and compute (Athena)
-- Single source of truth for KPI calculation
-
----
-
-### 📐 Data Modeling Best Practices
-
-- Star Schema design for analytical performance
-- Conformed dimensions across fact tables
-- Surrogate keys to ensure referential integrity
-- Defined grain per fact table
-- Type 1 dimension strategy for simplified management
-
----
-
-### 🔄 ETL & Processing Best Practices
-
-- Incremental loading for performance optimization
-- Snapshot strategy for inventory
-- Idempotent job execution structure
-- Controlled rebuild logic for dimensions
-- Explicit business calculation layer (margin, cost, revenue)
-
----
-
-### 🔎 Observability & Reliability
-
-- Row count validation between layers
-- Retry logic on job failure
-- Email alert notification
-- External log monitoring
-- Controlled abort strategy to prevent silent corruption
-
----
-
-### ☁️ Cloud & Scalability
-
-- Data Lake storage pattern (/dim/ and /fact/)
-- Schema management via AWS Glue Data Catalog
-- Query decoupling via Athena
-- Architecture designed for multi-client scalability
-
-This ensures the solution is production-oriented and not a proof-of-concept pipeline.
+The architecture is designed for reliability, analytical consistency, and multi-store scalability.
 
 ---
 
@@ -499,56 +336,17 @@ Valid database and AWS credentials are required.
 
 The implemented architecture delivers:
 
-### 🏢 Operational Impact
+- Centralized cloud-based analytical layer  
+- Automated daily ETL pipeline  
+- Decoupled ERP and BI workloads  
+- Reliable and consistent KPI computation  
 
-- Centralized analytical environment in the cloud
-- Automated daily pipeline execution
-- Reduced dependency on local database querying
-- Reliable KPI computation across dashboards
+It enables:
 
----
+- Revenue and margin monitoring  
+- Inventory and loss tracking  
+- Supplier performance and ABC analysis  
 
-### 📊 Analytical Capabilities Enabled
+The solution is designed for scalable growth, multi-store expansion, and future orchestration enhancements.
 
-- Revenue and gross margin monitoring
-- Loss tracking and shrinkage control
-- Inventory valuation snapshots
-- Supplier performance analysis
-- ABC curve and purchasing insights
 
----
-
-### ⚙ Engineering Improvements
-
-- Decoupled transactional and analytical workloads
-- Scalable cloud-based storage
-- Production-oriented failure control
-- Reproducible and auditable data transformations
-
----
-
-### 🚀 Scalability Readiness
-
-The architecture is prepared for:
-
-- Multi-store expansion
-- Multi-client adaptation
-- Larger dataset growth
-- Migration to orchestration tools such as Airflow (future roadmap)
-
-This project establishes a robust data engineering foundation for retail analytics.
-
----
-
-## 🚀 Future Improvements
-
-While the current architecture is production-ready, the following improvements could further enhance scalability and governance:
-
-- Implement partitioned Parquet storage for performance optimization
-- Introduce Airflow for advanced workflow orchestration
-- Add automated data quality validation checks
-- Implement CDC (Change Data Capture) logic
-- Adopt dbt for transformation standardization and testing
-- Prepare infrastructure provisioning via Terraform
-
-These enhancements would evolve the solution into a fully mature and scalable data platform.
